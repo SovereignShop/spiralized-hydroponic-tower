@@ -1,11 +1,16 @@
 
 <p float="left">
-  <img src="resources/images/spiralized-hydroponic-tower.jpg" width="385" />
-  <img src="resources/images/printed-tower.jpg" width="430" /> 
+  <img src="resources/images/spiralized-hydroponic-tower.jpg" width="380" />
+  <img src="resources/images/printed-tower.jpg" width="440" /> 
 </p>
 
 # Spiralized Tower
 
-This is code for a rapidly printable hydroponic tower. It's designed almost entirely printed with "spiralized outer contours" and a 0.8mm nozzle. Simply set the bottom layer with to 5.0mm and print away.
+This is code for a rapidly printable hydroponic tower. It's designed almost entirely printed with "spiralized outer contours" and a 0.8mm nozzle. Simply set the bottom layer with to 5.0mm and print away. The bottom reservoir is 1.6mm thickness and shot not be printed spiralized. There is an optional ultrasonic fogger reservoir that attaches to the top that will shower your plants with ultrasonic fog, helping to maintain a high internal humidity level. The segments are compression fit together, which helps keep the fog contained.
 
 NOTE: Cura changed (broke) the spiralized contours implementation in 5.x. Use 4.x to spiralize properly. On the flip side, the non-spiralized handling of single-wall prints is grealy improved in 5.x, so you'll generally get good quality without spiralized contours as well.
+
+
+The yields are great!
+
+![Cauliflour](resources/images/cauliflour.jpg)
