@@ -1,5 +1,8 @@
 
-![Spiralized Tower](resources/images/spiralized-hydroponic-tower.jpg) ![Printed Tower](resources/images/printed-tower.jpg)
+<p float="left">
+  <img src="resources/images/spiralized-hydroponic-tower.jpg" width="400" />
+  <img src="resources/images/printed-tower.jpg" width="400" /> 
+</p>
 
 # Spiralized Tower
 
