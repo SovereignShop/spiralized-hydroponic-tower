@@ -1,0 +1,8 @@
+{:deps {org.clojure/clojure {:mvn/version "1.11.0"}
+        sicmutils/sicmutils   {:mvn/version "0.22.0"}
+        org.clojars.cartesiantheatrics/manifold3d$linux-cuda-x86_64 {:mvn/version "1.0.64"}
+        org.clojars.cartesiantheatrics/plexus {:mvn/version "0.0.3"}
+        ;; org.clojars.cartesiantheatrics/manifold3d {:local/root "../manifold/bindings/java/target/manifold3d-1.0.39.jar"}
+        ;; plexus/plexus {:local/root "../plexus"}
+        }
+ :paths ["src/main"]}
