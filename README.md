@@ -1,5 +1,5 @@
 
-![Spiralized Tower](resources/images/spiralized-hydroponic-tower.png) ![Printed Tower](resources/images/printed-tower.jpg)
+![Spiralized Tower](resources/images/spiralized-hydroponic-tower.jpg) ![Printed Tower](resources/images/printed-tower.jpg)
 
 # Spiralized Tower
 
