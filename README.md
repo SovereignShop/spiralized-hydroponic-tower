@@ -1,7 +1,7 @@
 
 <p float="left">
-  <img src="resources/images/spiralized-hydroponic-tower.jpg" width="400" />
-  <img src="resources/images/printed-tower.jpg" width="400" /> 
+  <img src="resources/images/spiralized-hydroponic-tower.jpg" width="385" />
+  <img src="resources/images/printed-tower.jpg" width="430" /> 
 </p>
 
 # Spiralized Tower
