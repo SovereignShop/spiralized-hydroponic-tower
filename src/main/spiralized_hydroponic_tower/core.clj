@@ -16,6 +16,8 @@
 
 (def cup-holder-inner-radius 53/2)
 (def base-extra-radius 25)
+(def base-height 205)
+(def base-height-extra-tall 400)
 (def tower-wall-thickness 1.0)
 (def tower-segment-radius 57.8)
 (def tower-segment-amplitude 12.7)
@@ -283,51 +285,53 @@
    (rotate :y top-joint-angle)
    (forward :length 10)))
 
-(def base-segment-contour
-  (points
-   :axes [:x :y]
-   :meta-props [:segment]
-   (frame :name :origin :meta {:segment :bottom})
-   (rotate :x (- pi|2))
-   (translate :x (+ tower-segment-radius base-extra-radius 2))
-   (forward :length 10)
-   (u/curve-segment :offset (- 1.35)
-                    :height 205)
-   (set-meta :segment :top)
-   (u/curve-segment :offset 2 :height 6 :cs 5)
-   (rotate :y top-joint-angle)
-   (forward :length 10)))
-
-(let [[bottom top] (partition-by (fn [x] (-> x meta :segment))
-                                 base-segment-contour)]
-  (def base-tower-bottom-contour bottom)
-  (def base-tower-top-contour top))
+(defn make-tower-base [base-height]
+  (let [base-segment-contour (points
+                              :axes [:x :y]
+                              :meta-props [:segment]
+                              (frame :name :origin :meta {:segment :bottom})
+                              (rotate :x (- pi|2))
+                              (translate :x (+ tower-segment-radius base-extra-radius 2))
+                              (forward :length 10)
+                              (u/curve-segment :offset (- 1.35)
+                                               :height base-height)
+                              (set-meta :segment :top)
+                              (u/curve-segment :offset 2 :height 6 :cs 5)
+                              (rotate :y top-joint-angle)
+                              (forward :length 10))
+        [base-tower-bottom-contour
+         base-tower-top-contour] (partition-by (fn [x] (-> x meta :segment))
+                                               base-segment-contour)]
+    (extrude
+     (result :name :spiralized-tower-base
+             :expr (difference :base-wall-outer :base-wall-inner))
+     (frame :name :base-wall-outer :cross-section (housing-shape (+ base-extra-radius tower-segment-radius 2) tower-segment-amplitude 0 0))
+     (hull
+      (forward :length 1.1)
+      (forward :length 0.1))
+     (frame :name :base-wall-inner)
+     (->> (concat
+           (for [[i [radius z]] (map-indexed list base-tower-bottom-contour)]
+             (let [ratio (/ i (dec (count base-tower-bottom-contour)))]
+               [(set :cross-section (housing-shape radius tower-segment-amplitude (* ratio 0.8) ratio) :to [:base-wall-outer])
+                (set :cross-section (housing-shape radius tower-segment-amplitude (- (* ratio 0.8) tower-wall-thickness) ratio) :to [:base-wall-inner])
+                (translate :z (+ 1.2 z) :global? true)
+                (forward :length 0.01)]))
+           (for [[_ [radius z]] (map-indexed list base-tower-top-contour)]
+             (let [ratio 1]
+               [(set :cross-section (housing-shape radius tower-segment-amplitude (* ratio 0.8) ratio) :to [:base-wall-outer])
+                (set :cross-section (housing-shape radius tower-segment-amplitude (- (* ratio 0.8) tower-wall-thickness) ratio) :to [:base-wall-inner])
+                (translate :z (+ 1.2 z) :global? true)
+                (forward :length 0.01)])))
+          (partition 2 1)
+          (map (fn [[b t]]
+                 (hull b t)))))))
 
 (def ^:export-model spiralized-tower-base
-  (extrude
-   (result :name :spiralized-tower-base
-           :expr (difference :base-wall-outer :base-wall-inner))
-   (frame :name :base-wall-outer :cross-section (housing-shape (+ base-extra-radius tower-segment-radius 2) tower-segment-amplitude 0 0))
-   (hull
-    (forward :length 1.1)
-    (forward :length 0.1))
-   (frame :name :base-wall-inner)
-   (->> (concat
-         (for [[i [radius z]] (map-indexed list base-tower-bottom-contour)]
-           (let [ratio (/ i (dec (count base-tower-bottom-contour)))]
-             [(set :cross-section (housing-shape radius tower-segment-amplitude (* ratio 0.8) ratio) :to [:base-wall-outer])
-              (set :cross-section (housing-shape radius tower-segment-amplitude (- (* ratio 0.8) tower-wall-thickness) ratio) :to [:base-wall-inner])
-              (translate :z (+ 1.2 z) :global? true)
-              (forward :length 0.01)]))
-         (for [[_ [radius z]] (map-indexed list base-tower-top-contour)]
-           (let [ratio 1]
-             [(set :cross-section (housing-shape radius tower-segment-amplitude (* ratio 0.8) ratio) :to [:base-wall-outer])
-              (set :cross-section (housing-shape radius tower-segment-amplitude (- (* ratio 0.8) tower-wall-thickness) ratio) :to [:base-wall-inner])
-              (translate :z (+ 1.2 z) :global? true)
-              (forward :length 0.01)])))
-        (partition 2 1)
-        (map (fn [[b t]]
-               (hull b t))))))
+  (make-tower-base base-height))
+
+(def ^:export-model spiralized-tower-base-extra-tall
+  (make-tower-base base-height-extra-tall))
 
 (def ^:export-model spiralized-tower-lid
   (extrude
