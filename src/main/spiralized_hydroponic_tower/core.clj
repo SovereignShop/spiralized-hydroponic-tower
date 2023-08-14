@@ -35,6 +35,9 @@
 (def top-joint-offset 0.5)
 (def top-joint-angle (atan (/ 0.5 10)))
 
+(def tube-outer-radius (+ 0.3 (/ (u/in->mm 5/16) 2)))
+(def tube-inner-radius (- (/ (u/in->mm 5/16) 2) 1.6))
+
 (defn housing-shape-pts
   ([circle-radius sin-wave-amplitude wall-thickness ratio]
    (housing-shape-pts circle-radius sin-wave-amplitude wall-thickness ratio 120))
@@ -84,7 +87,7 @@
               (difference :center-support :net-pod-mask-composite)
               (difference :pod-segment-wall-outer :pod-segment-wall-inner :net-pod-mask-composite)
               (intersection :pod-segment-wall-outer
-                              (difference :net-pod-wall :net-pod-mask-composite))))
+                            (difference :net-pod-wall :net-pod-mask-composite))))
 
    (result :name :net-pod-wall
              :expr
@@ -102,13 +105,7 @@
             (for [i (range 3)]
               (rotate {:z (* 2/3 i pi)}
                       (union :net-pod-mask
-                             (hull :net-pod-mask-2 (translate {:x 30} (union :net-pod-mask-2)))))))
-           #_(union
-              (for [i (range 3)]
-                (rotate {:z (* 2/3 i pi)}
-                        #_(union :net-pod-mask)
-                        (hull :net-pod-mask-2
-                              (translate {:x 30} (union :net-pod-mask-2)))))))
+                             (hull :net-pod-mask-2 (translate {:x 30} (union :net-pod-mask-2))))))))
 
    (frame :name :origin)
 
@@ -335,8 +332,33 @@
 (def ^:export-model spiralized-tower-lid
   (extrude
    (result :name :spiralized-tower-lid
-           :expr (difference :lid-wall-outer :lid-net-pod-mask))
+           :expr (difference (union :lid-wall-outer :tube-body)
+                             :lid-net-pod-mask :tube-mask))
    (frame :name :origin :fn 40)
+
+   (branch
+    :from :origin
+    :with []
+    (frame :name :tube-mask
+           :cross-section (m/union
+                           (for [i (range 3)]
+                             (-> (m/hull (m/circle tube-inner-radius 100)
+                                         (-> (m/circle tube-inner-radius 100)
+                                             (m/translate [30 0])))
+                                 (m/rotate (* i 2/3 T))))))
+    (translate :z 1.2)
+    (forward :length 3)
+    (frame :name :tube-body
+           :cross-section (m/circle tube-outer-radius 100))
+    (set :cross-section (m/circle tube-inner-radius 100) :to [:tube-mask])
+    (forward :length 4)
+    (for [_ (range 3)]
+      (hull
+       (forward :length 1)
+       (translate :z 3)
+       (offset :delta -0.3 :to [:tube-body])
+       (forward :length 0.1)
+       (offset :delta 0.3 :to [:tube-body]))))
 
    (branch
     :from :origin
