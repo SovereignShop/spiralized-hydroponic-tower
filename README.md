@@ -1,8 +1,5 @@
 
-<p float="left">
-  <img src="resources/images/spiralized-hydroponic-tower.jpg" width="380" />
-  <img src="resources/images/printed-tower.jpg" width="440" /> 
-</p>
+![VSCode DevContainer](resources/images/vscode-dev.png)
 
 # Spiralized Tower
 
@@ -13,4 +10,23 @@ NOTE: Cura changed (broke) the spiralized contours implementation in 5.x. Use 4.
 
 The yields are great!
 
+# Development
+
+You can launch the project as a VSCode dev container to start developing right away. Once inside the container, you can view your models by selecting "Open With..." and "gLTF Model Viewer". Note, the popular gLTF Tools plugin does not work with Calva plugin at the moment. You will likely want to create a key binding to make it easy to export the current form as a .glb model. in `keybindings.json`:
+
+``` json
+{
+    "key": "ctrl+alt+m",
+    "command": "cal va.runCustomREPLCommand",
+    "args": {
+        "snippet": "(require '[plexus.core :refer [export]])(plexus.core/export (if (var? $current-form) (deref $current-form) $current-form) \"model.glb\" (m/material :color [0.7 0.7 1.0 1.0]))",
+    }
+}
+```
+
 ![Cauliflour](resources/images/cauliflour.jpg)
+<p float="left">
+  <img src="resources/images/spiralized-hydroponic-tower.jpg" width="380" />
+  <img src="resources/images/printed-tower.jpg" width="440" /> 
+</p>
+

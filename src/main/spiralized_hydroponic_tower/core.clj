@@ -42,7 +42,7 @@
 
 (defn housing-shape-pts
   ([circle-radius sin-wave-amplitude wall-thickness ratio]
-   (housing-shape-pts circle-radius sin-wave-amplitude wall-thickness ratio 120))
+   (housing-shape-pts circle-radius sin-wave-amplitude wall-thickness ratio 200))
   ([circle-radius sin-wave-amplitude wall-thickness ratio n-steps]
    (let [angle (* 2 pi)
          step-size (/ angle n-steps)]
@@ -114,24 +114,24 @@
    (branch
     :from :origin
     :with []
-    (frame :cross-section (m/circle cup-holder-inner-radius 70)
+    (frame :cross-section (m/circle cup-holder-inner-radius 150)
            :name :net-pod-mask)
-    (frame :cross-section (m/circle (+ cup-holder-inner-radius 1.0 6) 30)
+    (frame :cross-section (m/circle (+ cup-holder-inner-radius 1.0 6) 150)
            :name :net-pod-wall-body)
     (translate :x (- tower-segment-radius 9.15))
     (forward :length 2)
     (offset :delta 6 :to [:net-pod-mask])
     (forward :length 3)
     (branch
-       :from :net-pod-wall-body
-       :with []
-       (frame :cross-section (m/circle (+ cup-holder-inner-radius 1.0 6) 70)
-              :name :net-pod-wall-2)
-       (frame :cross-section (m/circle (+ 6 cup-holder-inner-radius) 70)
-              :name :net-pod-mask-2)
-       (forward :length 20)
-       (right :angle pi|4 :curve-radius 150)
-       (forward :length 45)))
+     :from :net-pod-wall-body
+     :with []
+     (frame :cross-section (m/circle (+ cup-holder-inner-radius 1.0 6) 150)
+            :name :net-pod-wall-2)
+     (frame :cross-section (m/circle (+ 6 cup-holder-inner-radius) 150)
+            :name :net-pod-mask-2)
+     (forward :length 20)
+     (right :angle pi|4 :curve-radius 150 :cs 200)
+     (forward :length 45)))
 
    (branch
     :from :origin
@@ -514,6 +514,7 @@
                                  spacer-segment-contour)]
   (def spacer-bottom-contour bottom)
   (def spacer-top-contour top))
+
 
 (def ^:export-model spiralized-tower-spacer-segment
   (extrude
