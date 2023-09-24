@@ -1,0 +1,24 @@
+{
+    "name": "Clojure with Calva",
+    "dockerFile": "Dockerfile",
+    "runArgs": [ "--gpus", "all"],
+    "forwardPorts": [8080],
+    "customizations": {
+        "vscode": {
+            "settings": {
+                "terminal.integrated.shell.linux": "/bin/bash"
+            },
+            "extensions": [
+				"betterthantomorrow.calva",
+				"cesium.gltf-vscode",
+				"ms-azuretools.vscode-docker",
+				"cloudedcat.vscode-model-viewer"
+			]
+        },
+        "betterthantomorrow.calva-spritz": {
+            "settings": {
+            }
+        }
+    },
+    "postCreateCommand": "echo 'Container is ready!'"
+}
