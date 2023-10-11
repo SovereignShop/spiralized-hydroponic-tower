@@ -5,15 +5,22 @@
     "forwardPorts": [8080],
     "customizations": {
         "vscode": {
+            "calva.customREPLCommandSnippets": [
+                {
+                    "name": "Plexus: Export Current Form",
+                    "key": "d",
+                    "snippet": "(require 'spiralized-hydroponic-tower.repl)(spiralized-hydroponic-tower.repl/export-model $current-form)"
+                }
+            ],
             "settings": {
                 "terminal.integrated.shell.linux": "/bin/bash"
             },
             "extensions": [
-				"betterthantomorrow.calva",
-				"cesium.gltf-vscode",
-				"ms-azuretools.vscode-docker",
-				"cloudedcat.vscode-model-viewer"
-			]
+                "betterthantomorrow.calva",
+                "cesium.gltf-vscode",
+                "ms-azuretools.vscode-docker",
+                "cloudedcat.vscode-model-viewer"
+            ]
         },
         "betterthantomorrow.calva-spritz": {
             "settings": {
