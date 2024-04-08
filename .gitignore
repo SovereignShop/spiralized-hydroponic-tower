@@ -12,4 +12,7 @@ pom.xml.asc
 .lein-failures
 .nrepl-port
 .cpcache/
+.calva
+.clj-kondo
+*.glb
 out

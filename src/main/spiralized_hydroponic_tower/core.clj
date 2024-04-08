@@ -1,48 +1,35 @@
 (ns spiralized-hydroponic-tower.core
   (:refer-clojure :exclude [set])
   (:require
-   [plexus.utils :as pu]
+   [plexus.utils :as pu] 
    [spiralized-hydroponic-tower.utils :as u]
-   [spiralized-hydroponic-tower.math
-    :refer [pi|2 pi|3 pi|4 pi|5 pi|6 two-pi
-            cos acos sin asin tan atan pi
-            TT T T|2 T|3 T|4 T|5 T|6]]
+   [spiralized-hydroponic-tower.math :refer [pi|2 pi|3 pi|4 pi|5 pi|6 two-pi
+                             cos acos sin asin tan atan pi
+                             TT T T|2 T|3 T|4 T|5 T|6 sqrt
+                             vec-sub vec-normalize vec-scale]]
    [plexus.core :as paths
-    :refer [forward hull left right up down backward defmodel translate spin
-            set set-meta segment lookup-transform transform branch offset
+    :refer [forward hull left right up down translate
+            set set-meta lookup-transform transform branch offset
             rotate frame save-transform add-ns extrude to points
-            result difference union insert intersection loft export-models]]
+            result difference union insert get-model
+            intersection loft export-models]]
    [clj-manifold3d.core :as m]))
 
 (def cup-holder-inner-radius 53/2)
 (def base-extra-radius 25)
-(def base-height 205)
-(def base-height-extra-tall 400)
-(def tower-wall-thickness 1.0)
+(def tower-wall-thickness 1.6)
 (def tower-segment-radius 57.8)
 (def tower-segment-amplitude 12.7)
-
 (def spacer-segment-height 208)
 (def spacer-segment-offset (+ 2 1.2 base-extra-radius))
 (def spacer-segment-angle (atan (/ spacer-segment-height spacer-segment-offset)))
 (def spacer-segment-length (/ (abs spacer-segment-offset) (cos spacer-segment-angle)))
 
-(def default-face-number 50)
-
-(def fogger-base-radius (+ 47/2 1.6))
-(def fogger-reservoir-height (+ 60 17))
-(def fogger-reservoir-radius (+ fogger-base-radius 0.5))
-
-(def top-joint--height 10)
-(def top-joint-offset 0.5)
-(def top-joint-angle (atan (/ 0.5 10)))
-
-(def tube-outer-radius (+ 0.3 (/ (u/in->mm 5/16) 2)))
-(def tube-inner-radius (- (/ (u/in->mm 5/16) 2) 1.6))
+(def face-number 50)
 
 (defn housing-shape-pts
   ([circle-radius sin-wave-amplitude wall-thickness ratio]
-   (housing-shape-pts circle-radius sin-wave-amplitude wall-thickness ratio 200))
+   (housing-shape-pts circle-radius sin-wave-amplitude wall-thickness ratio 120))
   ([circle-radius sin-wave-amplitude wall-thickness ratio n-steps]
    (let [angle (* 2 pi)
          step-size (/ angle n-steps)]
@@ -57,7 +44,12 @@
 (defn housing-shape
   "Sum a circle function with four revolutions of a sin function."
   [circle-radius sin-wave-amplitude wall-thickness ratio]
-  (m/cross-section (housing-shape-pts circle-radius sin-wave-amplitude wall-thickness ratio)))
+  (m/hull
+   (m/cross-section (housing-shape-pts circle-radius sin-wave-amplitude wall-thickness ratio))))
+
+(def top-joint--height 10)
+(def top-joint-offset 0.5)
+(def top-joint-angle (atan (/ 0.5 10)))
 
 (def tower-segment-contour
   (points
@@ -68,7 +60,7 @@
    (translate :x tower-segment-radius)
    (forward :length 160 :n-steps 55)
    (set-meta :segment :top)
-   (u/curve-segment :offset 0.8
+   (u/curve-segment :delta 0.8
                     :height 3
                     :cs 4)
    (forward :length 5)
@@ -80,26 +72,61 @@
   (def tower-segment-bottom-contour bottom)
   (def tower-segment-top-contour top))
 
+(defn create-control-points [radius ratio]
+  (let [pts (u/circle-pts radius (* 2 pi) 6)]
+    (loop [pts pts
+           ret []
+           i 0]
+      (cond
+        (= i (count pts)) ret
+        :else
+        (let [A (/ pi 3)
+              x (/ radius (cos A))
+              d (- x radius)
+
+              o (* d (if (odd? i) ratio (- 1 ratio)))
+
+              pt (nth pts i)
+              dir (vec-normalize (vec-sub pt [0 0]))]
+          (recur pts (conj ret (vec-scale dir (+ radius o))) (inc i)))))))
+
+(defn create-shape [pts curve-radius]
+  (loop [pts pts
+         ret []
+         idx 0]
+    (cond
+      (= idx (count pts)) ret
+      (odd? idx) (let [[p1 p2 p3] (u/get-neighbors pts idx)
+                       curve-points (u/round-edge p1 p2 p3 curve-radius 30)]
+                   (recur pts (into ret curve-points) (inc idx)))
+      :else (recur pts (conj ret (nth pts idx)) (inc idx)))))
+
 (def ^:export-model spiralized-tower-segment
   (extrude
+
    (result :name :spiralized-tower-segment
-             :expr
-             (union
-              (difference (intersection :side-support :pod-segment-wall-outer) :net-pod-mask-composite)
-              (difference :center-support :net-pod-mask-composite)
-              (difference :pod-segment-wall-outer :pod-segment-wall-inner :net-pod-mask-composite)
-              (intersection :pod-segment-wall-outer
-                            (difference :net-pod-wall :net-pod-mask-composite))))
+           :expr
+           (union
+            (difference (intersection :side-support :pod-segment-wall-outer) :net-pod-mask-composite)
+            (difference :center-support :net-pod-mask-composite)
+            (difference :pod-segment-wall-outer :pod-segment-wall-inner
+                        :net-pod-mask-composite)
+            (intersection :pod-segment-wall-outer :net-pod-wall)))
+
+
 
    (result :name :net-pod-wall
-             :expr
-             (union
-              (for [i (range 3)]
-                (rotate :z (* 2/3 i pi)
-                        (union (hull (union :net-pod-wall-body)
-                                     (translate :x 80 (union :net-pod-wall-body)))
-                               (hull (union :net-pod-wall-2 :net-pod-wall-body)
-                                     (translate :x 20 (union :net-pod-wall-2))))))))
+           :expr
+           (union
+            (for [i (range 3)]
+              (rotate :z (* 2/3 i pi)
+                      (difference
+                       (hull (union :net-pod-wall-body :net-pod-wall-2)
+                             (translate {:x 30} (union :net-pod-wall-body :net-pod-wall-2)))
+                       (union :net-pod-mask
+                              (hull
+                               :net-pod-mask-2
+                               (translate {:x 30} (union :net-pod-mask-2)))))))))
 
    (result :name :net-pod-mask-composite
            :expr
@@ -107,16 +134,18 @@
             (for [i (range 3)]
               (rotate {:z (* 2/3 i pi)}
                       (union :net-pod-mask
-                             (hull :net-pod-mask-2 (translate {:x 30} (union :net-pod-mask-2))))))))
+                             (hull
+                              :net-pod-mask-2
+                              (translate {:x 30} (union :net-pod-mask-2))))))))
 
    (frame :name :origin)
 
    (branch
     :from :origin
     :with []
-    (frame :cross-section (m/circle cup-holder-inner-radius 150)
+    (frame :cross-section (m/circle cup-holder-inner-radius 70)
            :name :net-pod-mask)
-    (frame :cross-section (m/circle (+ cup-holder-inner-radius 1.0 6) 150)
+    (frame :cross-section (m/circle (+ cup-holder-inner-radius (+ 0.1 tower-wall-thickness) 6) 30)
            :name :net-pod-wall-body)
     (translate :x (- tower-segment-radius 9.15))
     (forward :length 2)
@@ -125,12 +154,12 @@
     (branch
      :from :net-pod-wall-body
      :with []
-     (frame :cross-section (m/circle (+ cup-holder-inner-radius 1.0 6) 150)
+     (frame :cross-section (m/circle (+ cup-holder-inner-radius (+ 0.1 tower-wall-thickness) 6) 70)
             :name :net-pod-wall-2)
-     (frame :cross-section (m/circle (+ 6 cup-holder-inner-radius) 150)
+     (frame :cross-section (m/circle (+ 6 cup-holder-inner-radius) 70)
             :name :net-pod-mask-2)
      (forward :length 20)
-     (right :angle pi|4 :curve-radius 150 :cs 200)
+     (right :angle pi|4 :curve-radius 150)
      (forward :length 45)))
 
    (branch
@@ -156,44 +185,47 @@
        :from :origin
        (rotate :z (* i 2/3 pi))
        (translate :x (- 50))
-       (segment
-        (for [sign [- +]]
-          (branch
-           :from :origin
-           (translate :y (sign 5))
-           (rotate :z (sign (- pi|4)))
-           (forward :length 4)))))))
+       (for [sign [- +]]
+         (branch
+          :from :origin
+          (translate :y (sign 5))
+          (rotate :z (sign (- pi|4)))
+          (forward :length 4))))))
 
    (branch
     :from :origin
     :with []
     (frame :name :pod-segment-wall-outer)
     (frame :name :pod-segment-wall-inner)
-    (->> (concat
-          (for [[radius amplitude] [[(- tower-segment-radius 1) 12.5]]]
-            [(set :cross-section (housing-shape radius amplitude 0 0) :to [:pod-segment-wall-outer])
-             (set :cross-section (housing-shape radius amplitude (- tower-wall-thickness) 0) :to [:pod-segment-wall-inner])
-             (forward :length 0.05)])
-          (for [[i [radius z]] (map-indexed list tower-segment-bottom-contour) ]
-            (let [ratio (/ i (dec (count tower-segment-bottom-contour)))]
-              [(set :cross-section (housing-shape radius tower-segment-amplitude 0 ratio) :to [:pod-segment-wall-outer])
-               (set :cross-section (housing-shape radius tower-segment-amplitude (- tower-wall-thickness) ratio) :to [:pod-segment-wall-inner])
-               (translate :z (+ 5 z) :global? true)
-               (forward :length 0.05)]))
-          (for [[_ [radius z]] (map-indexed list tower-segment-top-contour)]
-            (let [ratio 1]
-              [(set :cross-section (housing-shape radius tower-segment-amplitude 0 ratio) :to [:pod-segment-wall-outer])
-               (set :cross-section (housing-shape radius tower-segment-amplitude (- tower-wall-thickness) ratio) :to [:pod-segment-wall-inner])
-               (translate :z (+ 5 z) :global? true)
-               (forward :length 0.05)])))
-         (partition 2 1)
-         (map (fn [[l r]]
-                (hull l r))))
+    (loft
+     (concat
+      (for [[radius amplitude] [[(- tower-segment-radius 1) 12.5]]]
+        [(set :cross-section (housing-shape radius amplitude 0 0) :to [:pod-segment-wall-outer])
+         (set :cross-section (housing-shape radius amplitude (- tower-wall-thickness) 0) :to [:pod-segment-wall-inner])
+         (forward :length 0.05)])
+
+      (for [[i [radius z]] (take-nth 1 (map-indexed list tower-segment-bottom-contour))]
+        (let [ratio (/ i (dec (count tower-segment-bottom-contour)))]
+          [(set :cross-section (housing-shape radius tower-segment-amplitude 0 ratio) :to [:pod-segment-wall-outer])
+           (set :cross-section (housing-shape radius tower-segment-amplitude (- tower-wall-thickness) ratio) :to [:pod-segment-wall-inner])
+           (translate :z (+ 5 z) :global? true)
+           (forward :length 1)]))
+
+      (for [[_ [radius z]] (map-indexed list tower-segment-top-contour)]
+        (let [ratio 1]
+          [(set :cross-section (housing-shape radius tower-segment-amplitude 0 ratio) :to [:pod-segment-wall-outer])
+           (set :cross-section (housing-shape radius tower-segment-amplitude (- tower-wall-thickness) ratio) :to [:pod-segment-wall-inner])
+           (translate :z (+ 5 z) :global? true)
+           (forward :length 0.05)]))))
     (to
      :models [:pod-segment-wall-inner]
      (hull
       (translate :z -0.25)
       (forward :length 0.3))))))
+
+(def fogger-base-radius (+ 47/2 1.6))
+(def fogger-reservoir-height (+ 60 17))
+(def fogger-reservoir-radius (+ fogger-base-radius 0.5))
 
 (def ^:export-model fogger-reservoir
   (extrude
@@ -213,13 +245,13 @@
     (u/right-forward-left-segment
      :bottom-radius fogger-reservoir-radius
      :height 14
-     :offset 7
+     :delta 7
      :curve-height 1.5
      :to [:fogger-reservoir-body])
     (u/right-forward-left-segment
      :bottom-radius (- fogger-reservoir-radius 1.6)
      :height 14
-     :offset 7
+     :delta 7
      :curve-offset -1.6
      :curve-height 1.5
      :to [:fogger-reservoir-mask])
@@ -233,7 +265,7 @@
        (translate :z 12)
        (set :cross-section (m/circle (+ 7 fogger-reservoir-radius) 120) :to [:fogger-reservoir-body])
        (set :cross-section (m/circle (+ 6.2 fogger-reservoir-radius) 120) :to [:fogger-reservoir-mask])
-       (forward :length 1 :fn default-face-number)))
+       (forward :length 1 :fn face-number)))
     (forward :length 5))))
 
 (def ^:export-model spiralized-fogger-segment
@@ -245,7 +277,8 @@
 
    (branch
     :from :origin
-    (:forms spiralized-tower-segment))
+    (insert :extrusion spiralized-tower-segment
+            :models [:pod-segment-wall-outer :pod-segment-wall-inner]))
 
    (branch
     :from :origin
@@ -281,108 +314,70 @@
    (forward :length 0.1)
    (set-meta :segment :top)
    (rotate :y (- pi|2 spacer-segment-angle))
-   (u/curve-segment :offset 2 :height 6)
+   (u/curve-segment :delta 2 :height 6)
    (rotate :y top-joint-angle)
    (forward :length 10)))
 
-(defn make-tower-base [base-height]
-  (let [base-segment-contour (points
-                              :axes [:x :y]
-                              :meta-props [:segment]
-                              (frame :name :origin :meta {:segment :bottom})
-                              (rotate :x (- pi|2))
-                              (translate :x (+ tower-segment-radius base-extra-radius 2))
-                              (forward :length 10)
-                              (u/curve-segment :offset (- 1.35)
-                                               :height base-height)
-                              (set-meta :segment :top)
-                              (u/curve-segment :offset 2 :height 6 :cs 5)
-                              (rotate :y top-joint-angle)
-                              (forward :length 10))
-        [base-tower-bottom-contour
-         base-tower-top-contour] (partition-by (fn [x] (-> x meta :segment))
-                                               base-segment-contour)]
-    (extrude
-     (result :name :spiralized-tower-base
-             :expr (difference :base-wall-outer :base-wall-inner))
-     (frame :name :base-wall-outer :cross-section (housing-shape (+ base-extra-radius tower-segment-radius 2) tower-segment-amplitude 0 0))
-     (hull
-      (forward :length 1.1)
-      (forward :length 0.1))
-     (frame :name :base-wall-inner)
-     (->> (concat
-           (for [[i [radius z]] (map-indexed list base-tower-bottom-contour)]
-             (let [ratio (/ i (dec (count base-tower-bottom-contour)))]
-               [(set :cross-section (housing-shape radius tower-segment-amplitude (* ratio 0.8) ratio) :to [:base-wall-outer])
-                (set :cross-section (housing-shape radius tower-segment-amplitude (- (* ratio 0.8) tower-wall-thickness) ratio) :to [:base-wall-inner])
-                (translate :z (+ 1.2 z) :global? true)
-                (forward :length 0.01)]))
-           (for [[_ [radius z]] (map-indexed list base-tower-top-contour)]
-             (let [ratio 1]
-               [(set :cross-section (housing-shape radius tower-segment-amplitude (* ratio 0.8) ratio) :to [:base-wall-outer])
-                (set :cross-section (housing-shape radius tower-segment-amplitude (- (* ratio 0.8) tower-wall-thickness) ratio) :to [:base-wall-inner])
-                (translate :z (+ 1.2 z) :global? true)
-                (forward :length 0.01)])))
-          (partition 2 1)
-          (map (fn [[b t]]
-                 (hull b t)))))))
+(def base-segment-contour
+  (points
+   :axes [:x :y]
+   :meta-props [:segment]
+   (frame :name :origin :meta {:segment :bottom})
+   (rotate :x (- pi|2))
+   (translate :x (+ tower-segment-radius base-extra-radius 2))
+   (forward :length 10)
+   (u/curve-segment :delta (- 1.35)
+                    :height 205)
+   (set-meta :segment :top)
+   (u/curve-segment :delta 2 :height 6 :cs 5)
+   (rotate :y top-joint-angle)
+   (forward :length 10)))
+
+(let [[bottom top] (partition-by (fn [x] (-> x meta :segment))
+                                 base-segment-contour)]
+  (def base-tower-bottom-contour bottom)
+  (def base-tower-top-contour top))
 
 (def ^:export-model spiralized-tower-base
-  (make-tower-base base-height))
-
-(def ^:export-model spiralized-tower-base-extra-tall
-  (make-tower-base base-height-extra-tall))
+  (extrude
+   (result :name :spiralized-tower-base
+           :expr (difference :base-wall-outer :base-wall-inner))
+   (frame :name :base-wall-outer :cross-section (housing-shape (+ base-extra-radius tower-segment-radius 2) tower-segment-amplitude 0 0))
+   (hull
+    (forward :length 1.1)
+    (forward :length 0.1))
+   (frame :name :base-wall-inner)
+   (loft
+    (concat
+     (for [[i [radius z]] (map-indexed list base-tower-bottom-contour)]
+       (let [ratio (/ i (dec (count base-tower-bottom-contour)))]
+         [(set :cross-section (m/hull (housing-shape radius tower-segment-amplitude (* ratio 0.8) ratio)) :to [:base-wall-outer])
+          (set :cross-section (m/hull (housing-shape radius tower-segment-amplitude (- (* ratio 0.8) tower-wall-thickness) ratio)) :to [:base-wall-inner])
+          (translate :z (+ 1.2 z) :global? true)
+          (forward :length 0.01)]))
+     (for [[_ [radius z]] (map-indexed list base-tower-top-contour)]
+       (let [ratio 1]
+         [(set :cross-section (m/hull (housing-shape radius tower-segment-amplitude (* ratio 0.8) ratio)) :to [:base-wall-outer])
+          (set :cross-section (m/hull (housing-shape radius tower-segment-amplitude (- (* ratio 0.8) tower-wall-thickness) ratio)) :to [:base-wall-inner])
+          (translate :z (+ 1.2 z) :global? true)
+          (forward :length 0.01)]))))))
 
 (def ^:export-model spiralized-tower-lid
   (extrude
    (result :name :spiralized-tower-lid
-           :expr (difference (union :lid-wall-outer :tube-body)
-                             :lid-net-pod-mask :tube-mask))
+           :expr (difference :lid-wall-outer :lid-net-pod-mask))
    (frame :name :origin :fn 40)
-
-   (branch
-    :from :origin
-    :with []
-    (frame :name :tube-mask
-           :cross-section (m/union
-                           (for [i (range 3)]
-                             (-> (m/hull (m/circle tube-inner-radius 100)
-                                         (-> (m/circle tube-inner-radius 100)
-                                             (m/translate [30 0])))
-                                 (m/rotate (* i 2/3 T))))))
-    (translate :z 1.2)
-    (forward :length 3)
-    (frame :name :tube-body
-           :cross-section (m/circle tube-outer-radius 100))
-    (set :cross-section (m/circle tube-inner-radius 100) :to [:tube-mask])
-    (forward :length 4)
-    (for [_ (range 3)]
-      (hull
-       (forward :length 1)
-       (translate :z 3)
-       (offset :delta -0.3 :to [:tube-body])
-       (forward :length 0.1)
-       (offset :delta 0.3 :to [:tube-body]))))
 
    (branch
     :from :origin
     :with []
     (frame :name :lid-wall-outer)
     (frame :name :lid-wall-inner)
-    (->> (concat
-          (for [amplitude [12.9 12.5]]
-            [(set :cross-section (housing-shape tower-segment-radius amplitude 0 0) :to [:lid-wall-outer])
-             (set :cross-section (housing-shape tower-segment-radius amplitude (- tower-wall-thickness) 0) :to [:lid-wall-inner])
-             (forward :length (if (= amplitude 12.5) 8 0.1))])
-          #_(for [[i [radius z]] (map-indexed list tower-segment-bottom-contour)]
-              (let [ratio (/ i (dec (count tower-segment-bottom-contour)))]
-                [(set :cross-section (housing-shape radius tower-segment-amplitude 0 ratio) :to [:lid-wall-outer])
-                 (set :cross-section (housing-shape radius tower-segment-amplitude (- tower-wall-thickness) ratio) :to [:lid-wall-inner])
-                 (translate :z (+ 7 z) :global? true)
-                 (forward :length 0.01)])))
-         (partition 2 1)
-         (map (fn [[b t]]
-                (hull b t)))))
+    (loft
+     (for [amplitude [12.9 12.5]]
+       [(set :cross-section (housing-shape tower-segment-radius amplitude 0 0) :to [:lid-wall-outer])
+        (set :cross-section (housing-shape tower-segment-radius amplitude (- tower-wall-thickness) 0) :to [:lid-wall-inner])
+        (forward :length (if (= amplitude 12.5) 8 0.1))])))
 
    (branch
     :from :origin
@@ -477,7 +472,7 @@
     :with []
     (frame :name :reservoir-outer-wall :cross-section (m/circle fogger-reservoir-radius))
     (forward :length 1.2)
-    (frame :name :reservoir-inner-wall :cross-section (m/circle (- fogger-reservoir-radius 1.0)))
+    (frame :name :reservoir-inner-wall :cross-section (m/circle (- fogger-reservoir-radius (+ 0.2 tower-wall-thickness))))
     (forward :length fogger-reservoir-height))))
 
 (def mini-fan
@@ -504,7 +499,7 @@
    (forward :length spacer-segment-length :n-steps 25)
    (rotate :y (- pi|2 spacer-segment-angle))
    (set-meta :segment :top)
-   (u/curve-segment :offset 2
+   (u/curve-segment :delta 2
                     :height 6
                     :cs 4)
    (rotate :y top-joint-angle)
@@ -514,7 +509,6 @@
                                  spacer-segment-contour)]
   (def spacer-bottom-contour bottom)
   (def spacer-top-contour top))
-
 
 (def ^:export-model spiralized-tower-spacer-segment
   (extrude
@@ -565,9 +559,9 @@
    (branch
     :from :origin
     :with []
-    (frame :cross-section (m/circle (+ 18 cup-holder-inner-radius))
+    (frame :cross-section (m/circle (+ 18 cup-holder-inner-radius) 100)
            :name :spacer-net-pod-mask)
-    (frame :cross-section (m/circle (+ 18 cup-holder-inner-radius 1.0 6))
+    (frame :cross-section (m/circle (+ 18 cup-holder-inner-radius (+ 0.2 tower-wall-thickness) 6) 100)
            :name :spacer-net-pod-wall-body)
     (for [i (range 1)]
       (branch
@@ -581,9 +575,11 @@
        (branch
         :from :spacer-net-pod-wall-body
         :with []
-        (frame :cross-section (m/circle (+ 18 cup-holder-inner-radius 1.0 6))
+        (frame :cross-section (m/circle (+ 18 cup-holder-inner-radius (+ 0.2 tower-wall-thickness) 6)
+                                        100)
                :name :spacer-net-pod-wall-2)
-        (frame :cross-section (m/circle (+ 18 6 cup-holder-inner-radius))
+        (frame :cross-section (m/circle (+ 18 6 cup-holder-inner-radius)
+                                        100)
                :name :spacer-net-pod-mask-2)
         (forward :length 10)
         (right :angle pi|6 :curve-radius 200)
@@ -615,43 +611,41 @@
     :from :origin
     :with []
     (frame :name :base-holes :cross-section (m/circle (/ (u/in->mm 1/2) 2)))
-    (segment
-     (for [[x y] [[-10 0]
-                  [-10 70]
-                  [-50 70]
-                  [-50 0]
-                  [-50 -70]
-                  [-10 -70]]]
-       (branch
-        :from :base-holes
-        (translate :x x :y y)
-        (forward :length 4)))))
+    (for [[x y] [[-10 0]
+                 [-10 70]
+                 [-50 70]
+                 [-50 0]
+                 [-50 -70]
+                 [-10 -70]]]
+      (branch
+       :from :base-holes
+       (translate :x x :y y)
+       (forward :length 4))))
 
    (branch
     :from :origin
     :with []
     (frame :name :spacer-wall-outer)
     (frame :name :spacer-wall-inner)
-    (->> (concat
-          (for [[amplitude length] [[(- tower-segment-amplitude 0.4) 5] [(+ 0.3 tower-segment-amplitude) 0.1]]]
-              [(set :cross-section (housing-shape (+ tower-segment-radius base-extra-radius 2) amplitude 0 0) :to [:spacer-wall-outer])
-               (set :cross-section (housing-shape (+ tower-segment-radius base-extra-radius 2) amplitude (- tower-wall-thickness) 0) :to [:spacer-wall-inner])
-               (forward :length length)])
-          (for [[i [radius z]] (map-indexed list spacer-bottom-contour)]
-            (let [ratio (/ i (dec (count spacer-bottom-contour)))]
-              [(set :cross-section (housing-shape radius tower-segment-amplitude 0 ratio) :to [:spacer-wall-outer])
-               (set :cross-section (housing-shape radius tower-segment-amplitude (- tower-wall-thickness) ratio) :to [:spacer-wall-inner])
-               (translate :z (+ 5 z) :global? true)
-               (forward :length 0.01)]))
-          (for [[_ [radius z]] (map-indexed list spacer-top-contour)]
-            (let [ratio 1]
-              [(set :cross-section (housing-shape radius tower-segment-amplitude 0 ratio) :to [:spacer-wall-outer])
-               (set :cross-section (housing-shape radius tower-segment-amplitude (- tower-wall-thickness) ratio) :to [:spacer-wall-inner])
-               (translate :z (+ 5 z) :global? true)
-               (forward :length 0.01)])))
-         (partition 2 1)
-         (map (fn [[b t]]
-                  (hull b t)))))))
+    (loft
+     (concat
+      (for [[amplitude length] [[(- tower-segment-amplitude 0.4) 5] [(+ 0.3 tower-segment-amplitude) 0.1]]]
+        [(set :cross-section (housing-shape (+ tower-segment-radius base-extra-radius 2) amplitude 0 0) :to [:spacer-wall-outer])
+         (set :cross-section (housing-shape (+ tower-segment-radius base-extra-radius 2) amplitude (- tower-wall-thickness) 0) :to [:spacer-wall-inner])
+         (forward :length length)])
+      (for [[i [radius z]] (map-indexed list spacer-bottom-contour)]
+        (let [ratio (/ i (dec (count spacer-bottom-contour)))]
+          [(set :cross-section (housing-shape radius tower-segment-amplitude 0 ratio) :to [:spacer-wall-outer])
+           (set :cross-section (housing-shape radius tower-segment-amplitude (- tower-wall-thickness) ratio) :to [:spacer-wall-inner])
+           (translate :z (+ 5 z) :global? true)
+           (forward :length 0.01)]))
+      (for [[_ [radius z]] (map-indexed list spacer-top-contour)]
+        (let [ratio 1]
+          [(set :cross-section (housing-shape radius tower-segment-amplitude 0 ratio) :to [:spacer-wall-outer])
+           (set :cross-section (housing-shape radius tower-segment-amplitude (- tower-wall-thickness) ratio) :to [:spacer-wall-inner])
+           (translate :z (+ 5 z) :global? true)
+           (forward :length 0.01)])))))))
+
 
 (def ^:export-model big-fan-mount
   (extrude
@@ -665,9 +659,9 @@
     (frame :name :cable-slot-mask
            :cross-section #_(m/circle 11)
            (m/union
-              (for [i (range 2)]
-                (-> (m/square 20 0.5 true)
-                    (m/rotate (* i 1/2 T))))))
+            (for [i (range 2)]
+              (-> (m/square 20 0.5 true)
+                  (m/rotate (* i 1/2 T))))))
     (translate :x 10)
     (forward :length 1.2)
     (set :cross-section (m/circle 13) :to [:cable-slot-mask])
@@ -712,24 +706,24 @@
    (for [[model curve-offset radius]
          [[:fan-mount-body 0 (+ 19 0.5)]
           [:fan-mount-mask -0.5 19]]]
-     [(u/curved-cylinder-offset
+     [(u/curve-segment-2
        :bottom-radius radius
-       :offset -0.5
+       :delta -0.5
        :height 1.5
        :curve-offset curve-offset
        :cs 100
        :to [model])
       (forward :length 0.8 :to [model])
-      (u/curved-cylinder-offset
+      (u/curve-segment-2
        :bottom-radius (- radius 0.5)
-       :offset 0.5
+       :delta 0.5
        :height 1.5
        :curve-offset (- curve-offset)
        :cs 100
        :to [model])])
    (forward :length 1/2 :to [:fan-mount-mask])))
 
-(def ^:export-model full-tower
+(def full-tower
   (extrude
    (result :name :full-tower
            :expr (union :spiralized-tower-base
@@ -752,9 +746,9 @@
    (insert :extrusion spiralized-fogger-segment)
    (insert :extrusion spiralized-tower-lid)))
 
+
 (comment
 
-  (time (doseq [model (export-models *ns* "glb")] (deref model)))
-  (time (doseq [model (export-models *ns* "stl")] (deref model)))
+  (time (map deref (export-models *ns* "stl" #".*" "-1.6mm-walls")))
 
   )
